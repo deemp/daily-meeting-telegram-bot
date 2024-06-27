@@ -15,6 +15,7 @@ from .custom_types import SendMessage
 from .filters import HasChatState, HasMessageText, HasMessageUserUsername, IsReplyToMeetingMessage
 from .meeting import schedule_meeting
 from .reminder import update_reminders
+from .work_time import handle_working_time
 from .messages import make_help_message
 from .state import ChatState, save_state, get_user, load_user_pm, create_user_pm, save_user_pm
 
@@ -31,6 +32,10 @@ def make_router(scheduler: AsyncIOScheduler, send_message: SendMessage, bot: Bot
     )
 
     handle_personal_settings_commands(
+        scheduler=scheduler, send_message=send_message, router=router, bot=bot
+    )
+
+    handle_working_time(
         scheduler=scheduler, send_message=send_message, router=router, bot=bot
     )
 
