@@ -117,18 +117,3 @@ class DaySchedule(BaseModel):
 
     def remove_interval(self, interval: Interval):
         self.intervals = [i for i in self.intervals if i != interval]
-
-
-class WeekSchedule(BaseModel):
-    self.schedule: Dict[str, DaySchedule] = dict()
-    self.tz = tz
-    self.shift = shift
-
-    for weekday in schedule:
-
-        intervals = []
-        for interval in schedule[weekday]["intervals"]:
-            intervals.append(Interval.from_string(interval, self.tz))
-
-        day_schedule = DaySchedule(weekday, schedule[weekday]["include"], intervals)
-        self.schedule[weekday] = day_schedule
