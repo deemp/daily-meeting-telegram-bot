@@ -57,7 +57,7 @@ async def send_reminder_messages(
                             reply_to_message_id=message_id
                         )
 
-        if chat_type == "supergroup" and len(chat_state.meeting_msg_ids) == 3:
+        if chat_type == "supergroup" and len(chat_state.meeting_msg_ids) == 3 and len(have_to_reply) > 0:
             await send_message(
                 chat_id=user_chat_id,
                 message=reminder_message
