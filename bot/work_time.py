@@ -3,17 +3,18 @@ from datetime import datetime
 
 from aiogram import Bot, Router, F
 from aiogram.filters.command import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, InlineQuery, CallbackQuery, InlineQueryResultArticle, InputTextMessageContent
 from aiogram.utils.i18n import gettext as _
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from pytz import timezone, utc
 
 from .commands import bot_command_names
 from .custom_types import SendMessage
+from .messages import make_interval_validation_message
 from .callbacks import IntervalCallback, WeekdayCallback
-# from .intervals import WeekSchedule, DaySchedule, Interval
+from .intervals import Interval
 from .filters import HasChatState, HasMessageUserUsername
-from .keyboards import get_schedule_keyboard
+from .keyboards import get_schedule_keyboard, get_interval_error_keyboard
 from .state import ChatState, save_state, get_user, load_user_pm, create_user_pm, save_user_pm
 
 
@@ -26,6 +27,7 @@ EDIT_PARSE_IVL = \
 
 ADD_HANDLE_IVL = r'^add\s+\w+\s+\d{1,2}[:.]\d{2}\s*-\s*\d{1,2}[:.]\d{2}$'
 ADD_IVL = r'^add\s+(?P<weekday>\w+)\s+(?P<start_time>\d{1,2}[:.]\d{2})\s*-\s*(?P<end_time>\d{1,2}[:.]\d{2})$'
+DEFAULT_INTERVAL = "23:59 - 23:59"
 
 schedule_db = {
             "Monday": {
@@ -55,13 +57,16 @@ schedule_db = {
             "Sunday": {
                 "include": False,
                 "intervals": []
-            },
+            }
         }
 
 chat_db = {
+    "default_working_time": "9:00 - 17:00",
     "schedule_msg": None,
-    "tz": timezone("Europe/Moscow"),
-    "shift": 0
+    "tz": "Europe/Moscow",
+    "shift": 0,
+    "edit_interval_message": None,
+    "message_with_keyboard": None
 }
 
 
@@ -70,10 +75,10 @@ def handle_working_time(
 ):
     @router.message(Command(bot_command_names.set_personal_working_time), HasMessageUserUsername(), HasChatState())
     async def show_user_schedule(message: Message, username: str, chat_state: ChatState):
-        # sch = WeekSchedule(schedule_db, tz=utc, shift=0)
+
         for weekday in schedule_db:
             if len(schedule_db[weekday]["intervals"]) == 0 and schedule_db[weekday]["include"]:
-                schedule_db[weekday]["intervals"].append("23:59 - 23:59")
+                schedule_db[weekday]["intervals"].append(DEFAULT_INTERVAL)
 
         layout = get_schedule_keyboard(schedule_db)
         schedule_msg = await message.answer(f"@{username}, here is your schedule", reply_markup=layout)
@@ -81,6 +86,12 @@ def handle_working_time(
 
     @router.inline_query(F.query.regexp(EDIT_HANDLE_IVL))
     async def show_inline_interval_editing(inline_query: InlineQuery):
+        message_with_keyboard = chat_db["message_with_keyboard"]
+        edit_interval_message = chat_db["edit_interval_message"]
+
+        if message_with_keyboard is not None and edit_interval_message is not None:
+            await message_with_keyboard.delete()
+            await edit_interval_message.delete()
 
         suggestion = InlineQueryResultArticle(
             id=inline_query.query,
@@ -106,24 +117,35 @@ def handle_working_time(
             interval_prev = f"{st_time_prev} - {end_time_prev}"
             interval_edit = f"{st_time_edit} - {end_time_edit}"
 
-            intervals = schedule_db[weekday]["intervals"]
-            if interval_prev in intervals:
-                intervals.remove(interval_prev)
-                intervals.append(interval_edit)
-                schedule_db[weekday]["intervals"] = intervals
+            is_valid, status_msg = make_interval_validation_message(interval_str=interval_edit, tz=chat_db["tz"])
 
-            layout = get_schedule_keyboard(schedule_db)
-            if chat_db["schedule_msg"]:
-                old_msg = chat_db["schedule_msg"]
-                await old_msg.edit_reply_markup(reply_markup=layout)
+            if is_valid:
 
-            await message.delete()
+                intervals = schedule_db[weekday]["intervals"]
+                if interval_prev in intervals:
+                    intervals.remove(interval_prev)
+                    intervals.append(interval_edit)
+                    schedule_db[weekday]["intervals"] = intervals
+
+                layout = get_schedule_keyboard(schedule_db)
+                if chat_db["schedule_msg"]:
+                    old_msg = chat_db["schedule_msg"]
+                    await old_msg.edit_reply_markup(reply_markup=layout)
+
+                await message.delete()
+
+            else:
+                layout = get_interval_error_keyboard(interval_prev, weekday)
+                keyboard_msg = await message.reply(text=status_msg, reply_markup=layout)
+
+                chat_db["edit_interval_message"] = message
+                chat_db["message_with_keyboard"] = keyboard_msg
 
     @router.callback_query(IntervalCallback.filter(F.action == 'add'))
     async def add_interval(cb: CallbackQuery, callback_data: IntervalCallback):
 
         weekday = callback_data.weekday
-        schedule_db[weekday]["intervals"].append("23:59 - 23:59")
+        schedule_db[weekday]["intervals"].append(DEFAULT_INTERVAL)
 
         layout = get_schedule_keyboard(schedule_db)
         await cb.message.edit_reply_markup(reply_markup=layout)
@@ -136,7 +158,7 @@ def handle_working_time(
         schedule_db[weekday]["intervals"].remove(interval)
 
         if len(schedule_db[weekday]["intervals"]) == 0 and schedule_db[weekday]["include"]:
-            schedule_db[weekday]["intervals"].append("23:59 - 23:59")
+            schedule_db[weekday]["intervals"].append(DEFAULT_INTERVAL)
 
         layout = get_schedule_keyboard(schedule_db)
         await cb.message.edit_reply_markup(reply_markup=layout)
@@ -148,7 +170,15 @@ def handle_working_time(
         schedule_db[weekday]["include"] = not schedule_db[weekday]["include"]
 
         if len(schedule_db[weekday]["intervals"]) == 0 and schedule_db[weekday]["include"]:
-            schedule_db[weekday]["intervals"].append("23:59 - 23:59")
+            schedule_db[weekday]["intervals"].append(DEFAULT_INTERVAL)
 
         layout = get_schedule_keyboard(schedule_db)
         await cb.message.edit_reply_markup(reply_markup=layout)
+
+    @router.callback_query(F.data == "cancel_editing_interval")
+    async def cancel_editing_interval(cb: CallbackQuery):
+        message_with_keyboard = cb.message
+        edit_interval_message = cb.message.reply_to_message
+
+        await message_with_keyboard.delete()
+        await edit_interval_message.delete()
