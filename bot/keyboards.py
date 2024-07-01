@@ -52,3 +52,15 @@ def get_schedule_keyboard(week_schedule: dict) -> InlineKeyboardMarkup:
         builder.attach(weekday_builder)
 
     return builder.as_markup()
+
+
+def get_interval_error_keyboard(interval: str, weekday: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+
+    builder.button(text="Cancel", callback_data="cancel_editing_interval")
+    builder.button(
+        text="Enter the interval again",
+        switch_inline_query_current_chat=f"edit  {weekday}  {interval}  -->  {interval}"
+    )
+
+    return builder.adjust(2).as_markup()
