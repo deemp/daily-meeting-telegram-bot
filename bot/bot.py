@@ -34,6 +34,7 @@ async def restore_scheduled_jobs(
             schedule_meeting(
                 meeting_time=chat_state.meeting_time,
                 chat_id=chat_state.chat_id,
+                topic_id=chat_state.topic_id,
                 scheduler=scheduler,
                 send_message=send_message,
             )
