@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, time
 
 from aiogram.utils.i18n import gettext as _
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -47,7 +47,7 @@ def make_job_id(some_id: int):
 
 
 def schedule_meeting(
-    meeting_time: datetime,
+    meeting_time: time,
     chat_id: ChatId,
     scheduler: AsyncIOScheduler,
     send_message: SendMessage,
@@ -59,7 +59,7 @@ def schedule_meeting(
         replace_existing=True,
         kwargs={"chat_id": chat_id, "send_message": send_message},
         trigger="cron",
-        start_date=meeting_time,
+        start_date=datetime.now(),
         hour=meeting_time.hour,
         minute=meeting_time.minute,
         day_of_week=day_of_week,  # TODO: make it same as day of the week of any joined users or something else

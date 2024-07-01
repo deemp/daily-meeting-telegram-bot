@@ -1,3 +1,5 @@
+from datetime import time
+from pytz import timezone
 from typing import Optional
 
 from aiogram import Bot, Dispatcher
@@ -30,9 +32,14 @@ async def restore_scheduled_jobs(
     chat_states = await ChatState.find_all().to_list()
 
     for chat_state in chat_states:
-        if chat_state.meeting_time:
+        if chat_state.meeting_time_hour and chat_state.meeting_time_minute and\
+            chat_state.default_time_zone:
+            meeting_time = time(
+                hour=chat_state.meeting_time_hour, minute=chat_state.meeting_time_minute,
+                tzinfo=timezone(chat_state.default_time_zone)
+            )
             schedule_meeting(
-                meeting_time=chat_state.meeting_time,
+                meeting_time=meeting_time,
                 chat_id=chat_state.chat_id,
                 scheduler=scheduler,
                 send_message=send_message,

@@ -25,4 +25,6 @@ day_of_week_to_num = {
     "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6
 }
 
-sample_time = "2024-06-03T14:00:00+03:00"
+sample_time = "13:20"
+
+sample_time_zone = "Europe/Moscow"
