@@ -8,11 +8,16 @@ from pydantic import BaseModel
 
 from .chat import ChatId
 from .language import Language
+from .intervals import DaySchedule, Interval
+from .constants import default_time_zone, default_user_schedule
 
 
 class ChatUser(BaseModel):
     username: str = "" 
     is_joined: bool = False
+    schedule: List[DaySchedule] = default_user_schedule
+    personal_default_working_time: Optional[Interval] = None
+    time_zone_shift: int = 0
     meeting_days: set[int] = set(range(0, 5))  # default value - [0 - 4] = Monday - Friday
     reminder_period: Optional[int] = None
     non_replied_daily_msgs: set[int] = set(range(0, 3))
@@ -42,6 +47,8 @@ async def create_user(username: str) -> ChatUser:
 
 class ChatState(Document):
     language: Language = Language.default
+    time_zone: str = default_time_zone
+    default_working_time: Optional[Interval] = None
     meeting_time: Optional[datetime] = None
     meeting_msg_ids: list[int] = []
     topic_id: Optional[int] = None
@@ -115,13 +122,14 @@ async def save_state(chat_state: ChatState) -> None:
     Args:
         chat_state (ChatState): The chat state instance to save.
     """
-
+    
     await chat_state.save()
 
 
 class UserPM(Document):
     username: str
     chat_id: Annotated[ChatId, Indexed(index_type=pymongo.ASCENDING)]
+    personal_time_zone: str = default_time_zone
 
 
 async def create_user_pm(username: str, chat_id: ChatId) -> UserPM:

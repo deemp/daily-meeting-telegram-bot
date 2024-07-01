@@ -1,4 +1,5 @@
 from aiogram import html
+from bot.intervals import DaySchedule
 
 ENCODING = "utf-8"
 
@@ -30,3 +31,14 @@ day_of_week_to_num = {
 }
 
 sample_time = "2024-06-03T14:00:00+03:00"
+
+default_time_zone = "Europe/Moscow"
+
+days_array = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+empty_day_schedule = [DaySchedule() for _ in range(len(days_array))]
+
+for i in range(len(days_array)):
+    empty_day_schedule[i].name = days_array[i]
+
+default_user_schedule = empty_day_schedule

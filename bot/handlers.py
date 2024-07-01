@@ -130,7 +130,7 @@ def handle_team_settings_commands(
                         Please write the meetings time in the {iso8601} format with an offset relative to the UTC time zone.
                         
                         You can calculate the time on the site {time_url}.
-                        
+
                         Example:
                         
                         /{set_meetings_time} {sample_time}

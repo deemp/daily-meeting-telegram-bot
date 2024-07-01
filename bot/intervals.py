@@ -141,7 +141,7 @@ class Interval(BaseModel):
 
 
 class DaySchedule(BaseModel):
-    name: str
+    name: str = ""
     included: bool = True
     intervals: List[Interval] = []
 
