@@ -86,34 +86,38 @@ async def get_joined_users(chat_state: ChatState) -> List[ChatUser]:
     return [user for user in chat_state.users.values() if user.is_joined]
 
 
-async def create_state(chat_id: ChatId) -> ChatState:
+async def create_state(chat_id: ChatId, topic_id: Optional[int] = None) -> ChatState:
     """Create a new chat state with the given chat ID.
     
     Args:
         chat_id (ChatId): The ID of the chat for which to create a state.
+        topic_id (int): The ID of the topic associated with the chat state.
     
     Returns:
         ChatState: The newly created chat state instance.
     """
 
-    return await ChatState(chat_id=chat_id).create()
+    return await ChatState(chat_id=chat_id, topic_id=topic_id).create()
 
 
-async def load_state(chat_id: ChatId) -> ChatState:
+async def load_state(chat_id: ChatId, topic_id: Optional[int] = None) -> ChatState:
     """Load a chat state by chat ID or create a new one if not found.
     
     Args:
         chat_id (ChatId): The ID of the chat to load the state for.
+        topic_id (int): The ID of the topic associated with the chat state.
     
     Returns:
         ChatState: The chat state instance found or created.
     """
 
-    match chat_state := await ChatState.find_one(ChatState.chat_id == chat_id):
+    match chat_state := await ChatState.find_one(
+        {"chat_id": chat_id, "topic_id": topic_id}
+    ):
         case ChatState():
             return chat_state
         case _:
-            return await create_state(chat_id=chat_id)
+            return await create_state(chat_id=chat_id, topic_id=topic_id)
 
 
 async def save_state(chat_state: ChatState) -> None:
