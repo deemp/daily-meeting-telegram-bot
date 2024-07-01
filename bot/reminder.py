@@ -16,10 +16,15 @@ from textwrap import dedent
 
 
 async def send_reminder_messages(
-        meeting_chat_id: ChatId, username: str, user_chat_id: ChatId, send_message: SendMessage, bot: Bot
+        meeting_chat_id: ChatId,
+        meeting_topic_id: Optional[int],
+        username: str,
+        user_chat_id: ChatId,
+        send_message: SendMessage,
+        bot: Bot
 ):
     chat = await bot.get_chat(meeting_chat_id)
-    chat_state = await load_state(chat_id=meeting_chat_id)
+    chat_state = await load_state(chat_id=meeting_chat_id, topic_id=meeting_topic_id)
     user = await get_user(chat_state=chat_state, username=username)
 
     have_to_reply = list(user.non_replied_daily_msgs)
@@ -110,13 +115,17 @@ async def update_reminders(
                 user_chad_id=user_pm.chat_id,
                 meeting_time=chat.meeting_time,
                 meeting_chat_id=chat.chat_id,
+                meeting_topic_id=chat.topic_id,
                 scheduler=scheduler,
                 send_message=send_message
             )
 
 
-def make_job_id(user_chat_id: int, meeting_chat_id: int):
-    return str(user_chat_id) + "_reminder" + "_for_" + str(meeting_chat_id)
+def make_job_id(user_chat_id: int, meeting_chat_id: int, meeting_topic_id: Optional[int]):
+    if meeting_topic_id:
+        return f"{user_chat_id}_reminder_for_{meeting_chat_id}_{meeting_topic_id}"
+    else:
+        return f"{user_chat_id}_reminder_for_{meeting_chat_id}"
 
 
 def schedule_reminder(
@@ -126,16 +135,18 @@ def schedule_reminder(
         user_chad_id: ChatId,
         meeting_time: datetime,
         meeting_chat_id: ChatId,
+        meeting_topic_id: Optional[int],
         scheduler: AsyncIOScheduler,
         send_message: SendMessage,
 ):
     scheduler.add_job(
         jobstore=jobstore,
         func=send_reminder_messages,
-        id=make_job_id(user_chad_id, meeting_chat_id),
+        id=make_job_id(user_chad_id, meeting_chat_id, meeting_topic_id),
         replace_existing=True,
         kwargs={
             "meeting_chat_id": meeting_chat_id,
+            "meeting_topic_id": meeting_topic_id,
             "username": username,
             "user_chat_id": user_chad_id,
             "send_message": send_message,
@@ -147,7 +158,7 @@ def schedule_reminder(
         misfire_grace_time=42,
     )
 
-    logging.info(scheduler.get_job(make_job_id(user_chad_id, meeting_chat_id)))
+    logging.info(scheduler.get_job(make_job_id(user_chad_id, meeting_chat_id, meeting_topic_id)))
 
 
 def get_message_link(chat_id: ChatId, message_id: ChatId, thread_id: Optional[int], chat_type: str):
