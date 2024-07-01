@@ -1,4 +1,5 @@
 import re
+from textwrap import dedent
 from datetime import datetime
 
 from aiogram import Bot, Router, F
@@ -12,8 +13,9 @@ from .commands import bot_command_names
 from .custom_types import SendMessage
 from .messages import make_interval_validation_message
 from .callbacks import IntervalCallback, WeekdayCallback
+from .constants import interval_format, sample_interval
 from .intervals import Interval
-from .filters import HasChatState, HasMessageUserUsername
+from .filters import HasChatState, HasMessageUserUsername, HasMessageText
 from .keyboards import get_schedule_keyboard, get_interval_error_keyboard
 from .state import ChatState, save_state, get_user, load_user_pm, create_user_pm, save_user_pm
 
@@ -27,7 +29,6 @@ EDIT_PARSE_IVL = \
 
 ADD_HANDLE_IVL = r'^add\s+\w+\s+\d{1,2}[:.]\d{2}\s*-\s*\d{1,2}[:.]\d{2}$'
 ADD_IVL = r'^add\s+(?P<weekday>\w+)\s+(?P<start_time>\d{1,2}[:.]\d{2})\s*-\s*(?P<end_time>\d{1,2}[:.]\d{2})$'
-DEFAULT_INTERVAL = "23:59 - 23:59"
 
 schedule_db = {
             "Monday": {
@@ -62,6 +63,7 @@ schedule_db = {
 
 chat_db = {
     "default_working_time": "9:00 - 17:00",
+    "personal_default_working_time": "8:00 - 18:00",
     "schedule_msg": None,
     "tz": "Europe/Moscow",
     "shift": 0,
@@ -73,16 +75,87 @@ chat_db = {
 def handle_working_time(
         scheduler: AsyncIOScheduler, send_message: SendMessage, router: Router, bot: Bot
 ):
+    @router.message(Command(bot_command_names.set_default_working_time), HasMessageText())
+    async def set_default_working_time(message: Message, message_text: str):
+        cmd = "/" + bot_command_names.set_default_working_time
+        interval = message_text.replace(cmd, "").strip()
+
+        is_valid, status_msg = make_interval_validation_message(interval_str=interval, tz="UTC")
+        if is_valid:
+            chat_db["default_working_time"] = interval
+            await message.answer(
+                _(
+                    "Your group default working time is set to {interval}"
+                ).format(interval=interval)
+            )
+        else:
+            await message.answer(
+                dedent(
+                    _(
+                        f"""
+                        Please write group default working time in {interval_format} format.
+                        
+                        Example:
+                        
+                        /{set_default_working_time} {sample_interval}
+                        """
+                    ).format(
+                        interval_format=interval_format,
+                        set_default_working_time=bot_command_names.set_default_working_time,
+                        sample_interval=sample_interval
+                    )
+                )
+            )
+
+    @router.message(Command(bot_command_names.set_personal_default_working_time), HasMessageText())
+    async def set_personal_default_working_time(message: Message, message_text: str):
+        cmd = "/" + bot_command_names.set_personal_default_working_time
+        interval = message_text.replace(cmd, "").strip()
+
+        is_valid, status_msg = make_interval_validation_message(interval_str=interval, tz="UTC")
+        if is_valid:
+            chat_db["personal_default_working_time"] = interval
+            await message.answer(
+                _(
+                    "Your personal default working time is set to {interval}"
+                ).format(interval=interval)
+            )
+        else:
+            await message.answer(
+                dedent(
+                    _(
+                        f"""
+                            Please write your personal default working time in {interval_format} format.
+
+                            Example:
+
+                            /{set_personal_default_working_time} {sample_interval}
+                            """
+                    ).format(
+                        interval_format=interval_format,
+                        set_default_working_time=bot_command_names.set_personal_default_working_time,
+                        sample_interval=sample_interval
+                    )
+                )
+            )
+
     @router.message(Command(bot_command_names.set_personal_working_time), HasMessageUserUsername(), HasChatState())
     async def show_user_schedule(message: Message, username: str, chat_state: ChatState):
+        personal_default_interval = chat_db["personal_default_working_time"]
+        group_default_interval = chat_db["default_working_time"]
 
-        for weekday in schedule_db:
-            if len(schedule_db[weekday]["intervals"]) == 0 and schedule_db[weekday]["include"]:
-                schedule_db[weekday]["intervals"].append(DEFAULT_INTERVAL)
+        if personal_default_interval is not None or group_default_interval is not None:
+            default = personal_default_interval if personal_default_interval is not None else group_default_interval
 
-        layout = get_schedule_keyboard(schedule_db)
-        schedule_msg = await message.answer(f"@{username}, here is your schedule", reply_markup=layout)
-        chat_db["schedule_msg"] = schedule_msg
+            for weekday in schedule_db:
+                if len(schedule_db[weekday]["intervals"]) == 0 and schedule_db[weekday]["include"]:
+                    schedule_db[weekday]["intervals"].append(default)
+
+            layout = get_schedule_keyboard(schedule_db)
+            schedule_msg = await message.answer(f"@{username}, here is your schedule", reply_markup=layout)
+            chat_db["schedule_msg"] = schedule_msg
+        else:
+            await message.answer("You should set up default group or personal working time first!")
 
     @router.inline_query(F.query.regexp(EDIT_HANDLE_IVL))
     async def show_inline_interval_editing(inline_query: InlineQuery):
@@ -144,33 +217,43 @@ def handle_working_time(
     @router.callback_query(IntervalCallback.filter(F.action == 'add'))
     async def add_interval(cb: CallbackQuery, callback_data: IntervalCallback):
 
+        personal_default_interval = chat_db["personal_default_working_time"]
+        group_default_interval = chat_db["default_working_time"]
+        default = personal_default_interval if personal_default_interval is not None else group_default_interval
+
         weekday = callback_data.weekday
-        schedule_db[weekday]["intervals"].append(DEFAULT_INTERVAL)
+        schedule_db[weekday]["intervals"].append(default)
 
         layout = get_schedule_keyboard(schedule_db)
         await cb.message.edit_reply_markup(reply_markup=layout)
 
     @router.callback_query(IntervalCallback.filter(F.action == 'remove'))
     async def remove_interval(cb: CallbackQuery, callback_data: IntervalCallback):
+        personal_default_interval = chat_db["personal_default_working_time"]
+        group_default_interval = chat_db["default_working_time"]
+        default = personal_default_interval if personal_default_interval is not None else group_default_interval
 
         weekday = callback_data.weekday
         interval = callback_data.interval.replace("|", ":")
         schedule_db[weekday]["intervals"].remove(interval)
 
         if len(schedule_db[weekday]["intervals"]) == 0 and schedule_db[weekday]["include"]:
-            schedule_db[weekday]["intervals"].append(DEFAULT_INTERVAL)
+            schedule_db[weekday]["intervals"].append(default)
 
         layout = get_schedule_keyboard(schedule_db)
         await cb.message.edit_reply_markup(reply_markup=layout)
 
     @router.callback_query(WeekdayCallback.filter(F.action == 'toggle'))
     async def toggle_weekday(cb: CallbackQuery, callback_data: WeekdayCallback):
+        personal_default_interval = chat_db["personal_default_working_time"]
+        group_default_interval = chat_db["default_working_time"]
+        default = personal_default_interval if personal_default_interval is not None else group_default_interval
 
         weekday = callback_data.weekday
         schedule_db[weekday]["include"] = not schedule_db[weekday]["include"]
 
         if len(schedule_db[weekday]["intervals"]) == 0 and schedule_db[weekday]["include"]:
-            schedule_db[weekday]["intervals"].append(DEFAULT_INTERVAL)
+            schedule_db[weekday]["intervals"].append(default)
 
         layout = get_schedule_keyboard(schedule_db)
         await cb.message.edit_reply_markup(reply_markup=layout)

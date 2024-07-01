@@ -15,11 +15,13 @@ class BotCommands(BaseModel):
     set_meetings_time_zone: str
     set_meetings_time: str
     set_meetings_days: str
+    set_default_working_time: str
     # personal settings
     join: str
     skip: str
     set_personal_meetings_days: str
     set_personal_working_time: str
+    set_personal_default_working_time: str
     set_reminder_period: str
     join_today: str
     skip_today: str
@@ -44,11 +46,13 @@ bot_command_names = BotCommandNames(
     set_meetings_time_zone="set_meetings_time_zone",
     set_meetings_time="set_meetings_time",
     set_meetings_days="set_meetings_days",
+    set_default_working_time="set_default_working_time",
     # personal settings
     join="join",
     skip="skip",
     set_personal_meetings_days="set_personal_meetings_days",
     set_personal_working_time="set_personal_working_time",
+    set_personal_default_working_time="set_personal_default_working_time",
     set_reminder_period="set_reminder_period",
     join_today="join_today",
     skip_today="skip_today",
@@ -76,11 +80,13 @@ def bot_command_descriptions() -> BotCommandDescriptions:
         set_meetings_time_zone=_("Set meetings time zone."),
         set_meetings_time=_("Set meetings time."),
         set_meetings_days=_("Set meetings days."),
+        set_default_working_time=_("Set default working interval for weekday."),
         # personal settings
         join=_("Join meetings."),
         skip=_("Skip meetings."),
         set_personal_meetings_days=_("Set the days when you can join meetings."),
         set_personal_working_time=_("Set your working schedule."),
+        set_personal_default_working_time=_("Set personal default working interval for weekday."),
         set_reminder_period=_("Set how often you'll be reminded about unanswered questions."),
         join_today=_("Join only today's meeting."),
         skip_today=_("Skip only today's meeting."),
